@@ -37,6 +37,14 @@ const (
 	kHIDPage_Consumer       = 0x0C
 )
 
+type _IOHIDReportType uint32
+const (
+	kIOHIDReportTypeInput   _IOHIDReportType = 0
+	kIOHIDReportTypeOutput  _IOHIDReportType = 1
+	kIOHIDReportTypeFeature _IOHIDReportType = 2
+	kIOHIDReportTypeCount   _IOHIDReportType = 4
+)
+
 const (
 	kHIDUsage_GD_Joystick            = 0x4
 	kHIDUsage_GD_GamePad             = 0x5
@@ -72,6 +80,11 @@ var (
 	kIOHIDProductKey         = []byte("Product\x00")
 	kIOHIDDeviceUsagePageKey = []byte("DeviceUsagePage\x00")
 	kIOHIDDeviceUsageKey     = []byte("DeviceUsage\x00")
+	kIOHIDTransportKey       = []byte("Transport\x00")
+
+	kIOHIDTransportUSBValue                = "USB"
+	kIOHIDTransportBluetoothValue          = "Bluetooth"
+	kIOHIDTransportBluetoothLowEnergyValue = "BluetoothLowEnergy"
 )
 
 type _IOOptionBits uint32
@@ -83,6 +96,8 @@ type _IOReturn int32
 type _IOHIDElementType uint32
 
 type _IOHIDDeviceCallback func(context unsafe.Pointer, result _IOReturn, sender unsafe.Pointer, device _IOHIDDeviceRef)
+type _IOHIDValueCallback  func(context unsafe.Pointer, result _IOReturn, sender unsafe.Pointer, value  _IOHIDValueRef)
+type _IOHIDReportCallback func(context unsafe.Pointer, result _IOReturn, sender unsafe.Pointer, reportType _IOHIDReportType, reportID uint32, reportPointer unsafe.Pointer, reportLength int)
 
 var (
 	iokit = purego.Dlopen("IOKit.framework/IOKit", purego.RTLD_GLOBAL)
@@ -94,6 +109,8 @@ var (
 	procIOHIDManagerSetDeviceMatchingMultiple      = purego.Dlsym(iokit, "IOHIDManagerSetDeviceMatchingMultiple")
 	procIOHIDManagerRegisterDeviceMatchingCallback = purego.Dlsym(iokit, "IOHIDManagerRegisterDeviceMatchingCallback")
 	procIOHIDManagerRegisterDeviceRemovalCallback  = purego.Dlsym(iokit, "IOHIDManagerRegisterDeviceRemovalCallback")
+	procIOHIDManagerRegisterInputValueCallback     = purego.Dlsym(iokit, "IOHIDManagerRegisterInputValueCallback")
+	procIOHIDManagerRegisterInputReportCallback    = purego.Dlsym(iokit, "IOHIDManagerRegisterInputReportCallback")
 	procIOHIDManagerScheduleWithRunLoop            = purego.Dlsym(iokit, "IOHIDManagerScheduleWithRunLoop")
 	procIOHIDElementGetType                        = purego.Dlsym(iokit, "IOHIDElementGetType")
 	procIOHIDElementGetUsage                       = purego.Dlsym(iokit, "IOHIDElementGetUsage")
@@ -103,6 +120,7 @@ var (
 	procIOHIDDeviceGetValue                        = purego.Dlsym(iokit, "IOHIDDeviceGetValue")
 	procIOHIDValueGetIntegerValue                  = purego.Dlsym(iokit, "IOHIDValueGetIntegerValue")
 	procIOHIDDeviceCopyMatchingElements            = purego.Dlsym(iokit, "IOHIDDeviceCopyMatchingElements")
+	procIOHIDDeviceSetReport                       = purego.Dlsym(iokit, "IOHIDDeviceSetReport")
 )
 
 func _IOHIDElementGetTypeID() _CFTypeID {
@@ -137,6 +155,13 @@ func _IOHIDManagerRegisterDeviceRemovalCallback(manager _IOHIDManagerRef, callba
 	purego.SyscallN(procIOHIDManagerRegisterDeviceRemovalCallback, uintptr(manager), purego.NewCallback(callback), uintptr(context))
 }
 
+func _IOHIDManagerRegisterInputValueCallback(manager _IOHIDManagerRef, callback _IOHIDValueCallback, context unsafe.Pointer) {
+	purego.SyscallN(procIOHIDManagerRegisterInputValueCallback, uintptr(manager), purego.NewCallback(callback), uintptr(context))
+}
+
+func _IOHIDManagerRegisterInputReportCallback(manager _IOHIDManagerRef, callback _IOHIDReportCallback, context unsafe.Pointer) {
+	purego.SyscallN(procIOHIDManagerRegisterInputReportCallback, uintptr(manager), purego.NewCallback(callback), uintptr(context))
+}
 func _IOHIDManagerScheduleWithRunLoop(manager _IOHIDManagerRef, runLoop _CFRunLoopRef, runLoopMode _CFStringRef) {
 	purego.SyscallN(procIOHIDManagerScheduleWithRunLoop, uintptr(manager), uintptr(runLoop), uintptr(runLoopMode))
 }
@@ -182,4 +207,9 @@ func _IOHIDValueGetIntegerValue(value _IOHIDValueRef) _CFIndex {
 func _IOHIDDeviceCopyMatchingElements(device _IOHIDDeviceRef, matching _CFDictionaryRef, options _IOOptionBits) _CFArrayRef {
 	ret, _, _ := purego.SyscallN(procIOHIDDeviceCopyMatchingElements, uintptr(device), uintptr(matching), uintptr(options))
 	return _CFArrayRef(ret)
+}
+
+func _IOHIDDeviceSetReport(device _IOHIDDeviceRef, reportType _IOHIDReportType, reportID int, report unsafe.Pointer, size int) _IOReturn {
+	ret, _, _ := purego.SyscallN(procIOHIDDeviceSetReport, uintptr(device), uintptr(reportType), uintptr(reportID), uintptr(report), uintptr(size))
+	return _IOReturn(ret)
 }

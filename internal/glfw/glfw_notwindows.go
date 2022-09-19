@@ -294,6 +294,7 @@ func GetPrimaryMonitor() *Monitor {
 }
 
 func Init() error {
+	glfw.InitHint(glfw.CocoaUseJoysticks, 1)
 	return glfw.Init()
 }
 

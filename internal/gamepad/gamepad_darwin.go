@@ -98,6 +98,8 @@ func (g *nativeGamepadsImpl) init(gamepads *gamepads) error {
 	_IOHIDManagerSetDeviceMatchingMultiple(g.hidManager, matching)
 	_IOHIDManagerRegisterDeviceMatchingCallback(g.hidManager, ebitenGamepadMatchingCallback, nil)
 	_IOHIDManagerRegisterDeviceRemovalCallback(g.hidManager, ebitenGamepadRemovalCallback, nil)
+	_IOHIDManagerRegisterInputValueCallback(g.hidManager, ebitenGamepadValueCallback, nil)
+	//_IOHIDManagerRegisterInputReportCallback(g.hidManager, ebitenGamepadInputCallback, nil)
 
 	_IOHIDManagerScheduleWithRunLoop(g.hidManager, _CFRunLoopGetMain(), **(**_CFStringRef)(unsafe.Pointer(&kCFRunLoopDefaultMode)))
 
@@ -119,6 +121,12 @@ func ebitenGamepadRemovalCallback(ctx unsafe.Pointer, res _IOReturn, sender unsa
 	n.devicesM.Lock()
 	defer n.devicesM.Unlock()
 	n.devicesToRemove = append(n.devicesToRemove, device)
+}
+
+func ebitenGamepadValueCallback(ctx unsafe.Pointer, res _IOReturn, sender unsafe.Pointer, value _IOHIDValueRef) {
+}
+
+func ebitenGamepadInputCallback(ctx unsafe.Pointer, res _IOReturn, sender unsafe.Pointer, reportType _IOHIDReportType, reportID uint32, reportPointer unsafe.Pointer, reportLength int) {
 }
 
 func (g *nativeGamepadsImpl) update(gamepads *gamepads) error {
@@ -189,6 +197,10 @@ func (g *nativeGamepadsImpl) addDevice(device _IOHIDDeviceRef, gamepads *gamepad
 	n := &nativeGamepadImpl{
 		device: device,
 	}
+	if isDualShock4(vendor, product) {
+		n.enhanced = newDualShock4(device, vendor, product)
+	}
+
 	gp := gamepads.add(name, sdlID)
 	gp.native = n
 
@@ -303,12 +315,16 @@ type nativeGamepadImpl struct {
 	axisValues   []float64
 	buttonValues []bool
 	hatValues    []int
+
+	enhanced *dualShock4
 }
 
 func (g *nativeGamepadImpl) elementValue(e *element) int {
 	var valueRef _IOHIDValueRef
 	if _IOHIDDeviceGetValue(g.device, e.native, &valueRef) == kIOReturnSuccess {
 		return int(_IOHIDValueGetIntegerValue(valueRef))
+	} else {
+		fmt.Println("failed to do _IOHIDDeviceGetValue")
 	}
 	return 0
 }
@@ -420,4 +436,7 @@ func (g *nativeGamepadImpl) hatState(hat int) int {
 
 func (g *nativeGamepadImpl) vibrate(duration time.Duration, strongMagnitude float64, weakMagnitude float64) {
 	// TODO: Implement this (#1452)
+	if g.enhanced != nil {
+		g.enhanced.vibrate(duration, strongMagnitude, weakMagnitude)
+	}
 }
